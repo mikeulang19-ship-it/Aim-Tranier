@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AIM TRACKER</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #050a0f;
+    --panel: #0a1520;
+    --border: #0f3055;
+    --accent: #00e5ff;
+    --accent2: #ff2d55;
+    --accent3: #39ff14;
+    --text: #c8e6f0;
+    --dim: #3a5a6a;
+    --target-color: #ff2d55;
+    --target-glow: rgba(255,45,85,0.6);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Share Tech Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+    cursor: crosshair;
+  }
+
+  /* SCANLINE OVERLAY */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,229,255,0.015) 2px,
+      rgba(0,229,255,0.015) 4px
+    );
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  /* VIGNETTE */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.7) 100%);
+    pointer-events: none;
+    z-index: 998;
+  }
+
+  /* ---- SCREENS ---- */
+  .screen {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+  }
+
+  /* ---- MENU SCREEN ---- */
+  #menu {
+    background: radial-gradient(ellipse at 50% 40%, #061828 0%, #050a0f 70%);
+    gap: 0;
+    z-index: 10;
+  }
+
+  .logo {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(3rem, 8vw, 7rem);
+    font-weight: 900;
+    color: var(--accent);
+    letter-spacing: 0.2em;
+    text-shadow:
+      0 0 20px var(--accent),
+      0 0 60px rgba(0,229,255,0.4),
+      0 0 120px rgba(0,229,255,0.2);
+    animation: pulse-logo 3s ease-in-out infinite;
+    line-height: 1;
+  }
+
+  .logo span {
+    color: var(--accent2);
+    text-shadow:
+      0 0 20px var(--accent2),
+      0 0 60px rgba(255,45,85,0.4);
+  }
+
+  @keyframes pulse-logo {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.85; }
+  }
+
+  .tagline {
+    font-size: 0.85rem;
+    color: var(--dim);
+    letter-spacing: 0.35em;
+    margin: 1rem 0 3rem;
+    text-transform: uppercase;
+  }
+
+  .mode-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+    width: min(700px, 90vw);
+  }
+
+  .mode-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 1.5rem 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .mode-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+    transform: scaleX(0);
+    transition: transform 0.2s;
+  }
+
+  .mode-card:hover {
+    border-color: var(--accent);
+    background: #0d1e2e;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(0,229,255,0.15);
+  }
+
+  .mode-card:hover::before { transform: scaleX(1); }
+
+  .mode-card.selected {
+    border-color: var(--accent);
+    background: #0d1e2e;
+    box-shadow: 0 0 20px rgba(0,229,255,0.2);
+  }
+
+  .mode-card.selected::before { transform: scaleX(1); }
+
+  .mode-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    display: block;
+  }
+
+  .mode-name {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+    margin-bottom: 0.3rem;
+  }
+
+  .mode-desc {
+    font-size: 0.7rem;
+    color: var(--dim);
+    line-height: 1.4;
+  }
+
+  .diff-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .diff-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    padding: 0.5rem 1.2rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .diff-btn:hover, .diff-btn.active {
+    border-color: var(--accent3);
+    color: var(--accent3);
+    box-shadow: 0 0 10px rgba(57,255,20,0.2);
+  }
+
+  .start-btn {
+    background: transparent;
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    font-family: 'Orbitron', monospace;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.3em;
+    padding: 1rem 3rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .start-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--accent);
+    transform: scaleX(0);
+    transition: transform 0.2s;
+    transform-origin: left;
+  }
+
+  .start-btn:hover {
+    color: var(--bg);
+    box-shadow: 0 0 30px rgba(0,229,255,0.5);
+  }
+
+  .start-btn:hover::before { transform: scaleX(1); }
+  .start-btn span { position: relative; z-index: 1; }
+
+  /* ---- GAME SCREEN ---- */
+  #game {
+    display: none;
+    z-index: 5;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0;
+  }
+
+  #game.active { display: flex; }
+
+  .hud {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 1.5rem;
+    background: rgba(5,10,15,0.9);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    z-index: 20;
+    backdrop-filter: blur(4px);
+  }
+
+  .hud-stat {
+    text-align: center;
+    min-width: 80px;
+  }
+
+  .hud-label {
+    font-size: 0.6rem;
+    color: var(--dim);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+  .hud-value {
+    font-family: 'Orbitron', monospace;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1;
+  }
+
+  .hud-value.timer-warning { color: var(--accent2); animation: blink 0.5s step-end infinite; }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .hud-center {
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+  }
+
+  .timer-bar-wrap {
+    width: 200px;
+    height: 4px;
+    background: var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .timer-bar {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.1s linear, background 0.3s;
+    transform-origin: left;
+  }
+
+  #arena {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse at 20% 80%, rgba(0,229,255,0.03) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 20%, rgba(255,45,85,0.03) 0%, transparent 50%),
+      linear-gradient(135deg, #050a0f 0%, #070d14 50%, #050a0f 100%);
+  }
+
+  /* Grid lines */
+  #arena::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(15,48,85,0.3) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(15,48,85,0.3) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+  }
+
+  .target {
+    position: absolute;
+    border-radius: 50%;
+    cursor: crosshair;
+    transform: translate(-50%, -50%) scale(0);
+    transition: transform 0.12s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    will-change: transform;
+  }
+
+  .target.visible { transform: translate(-50%, -50%) scale(1); }
+
+  .target-inner {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .target-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 2px solid rgba(255,45,85,0.6);
+    animation: ring-pulse 1.5s ease-in-out infinite;
+  }
+
+  .target-ring:nth-child(1) { inset: 0; }
+  .target-ring:nth-child(2) { inset: 20%; animation-delay: 0.3s; }
+  .target-ring:nth-child(3) { inset: 40%; background: var(--accent2); border: none; }
+
+  @keyframes ring-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .target-glow-circle {
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,45,85,0.3) 0%, transparent 70%);
+    animation: glow-pulse 1s ease-in-out infinite;
+  }
+
+  @keyframes glow-pulse {
+    0%, 100% { transform: scale(1); opacity: 0.8; }
+    50% { transform: scale(1.15); opacity: 0.4; }
+  }
+
+  /* Hit flash */
+  .hit-flash {
+    position: absolute;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    animation: hit-expand 0.35s ease-out forwards;
+  }
+
+  @keyframes hit-expand {
+    0% { width: 10px; height: 10px; opacity: 1; background: white; }
+    100% { width: 80px; height: 80px; opacity: 0; background: var(--accent); }
+  }
+
+  /* Miss indicator */
+  .miss-flash {
+    position: fixed;
+    inset: 0;
+    background: rgba(255,45,85,0.1);
+    pointer-events: none;
+    animation: miss-fade 0.3s ease-out forwards;
+    z-index: 100;
+  }
+
+  @keyframes miss-fade {
+    0% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  /* Score popup */
+  .score-pop {
+    position: absolute;
+    font-family: 'Orbitron', monospace;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--accent3);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    animation: pop-up 0.6s ease-out forwards;
+    text-shadow: 0 0 10px var(--accent3);
+  }
+
+  @keyframes pop-up {
+    0% { opacity: 1; transform: translate(-50%, -50%); }
+    100% { opacity: 0; transform: translate(-50%, calc(-50% - 60px)); }
+  }
+
+  /* Quit btn */
+  .quit-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    padding: 0.3rem 0.8rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .quit-btn:hover {
+    border-color: var(--accent2);
+    color: var(--accent2);
+  }
+
+  /* ---- RESULTS SCREEN ---- */
+  #results {
+    display: none;
+    z-index: 15;
+    gap: 0;
+  }
+
+  #results.active { display: flex; }
+
+  .results-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 2.5rem;
+    font-weight: 900;
+    letter-spacing: 0.2em;
+    margin-bottom: 0.5rem;
+  }
+
+  .results-title.excellent { color: var(--accent3); text-shadow: 0 0 30px rgba(57,255,20,0.5); }
+  .results-title.good { color: var(--accent); text-shadow: 0 0 30px rgba(0,229,255,0.5); }
+  .results-title.average { color: #ffbe0b; text-shadow: 0 0 30px rgba(255,190,11,0.5); }
+  .results-title.poor { color: var(--accent2); text-shadow: 0 0 30px rgba(255,45,85,0.5); }
+
+  .results-mode {
+    font-size: 0.75rem;
+    color: var(--dim);
+    letter-spacing: 0.3em;
+    margin-bottom: 2.5rem;
+    text-transform: uppercase;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--border);
+    width: min(600px, 90vw);
+    margin-bottom: 1px;
+  }
+
+  .stat-box {
+    background: var(--panel);
+    padding: 1.5rem;
+    text-align: center;
+  }
+
+  .stat-box-label {
+    font-size: 0.65rem;
+    color: var(--dim);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 0.4rem;
+  }
+
+  .stat-box-value {
+    font-family: 'Orbitron', monospace;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .accuracy-bar-wrap {
+    width: min(600px, 90vw);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-top: none;
+    padding: 1.2rem 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .accuracy-bar-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    color: var(--dim);
+    margin-bottom: 0.5rem;
+    letter-spacing: 0.1em;
+  }
+
+  .accuracy-bar {
+    height: 8px;
+    background: var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .accuracy-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent3));
+    transition: width 1s ease-out;
+    width: 0%;
+  }
+
+  .results-btns {
+    display: flex;
+    gap: 1rem;
+  }
+
+  .res-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.8rem;
+    letter-spacing: 0.15em;
+    padding: 0.7rem 1.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .res-btn.primary {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .res-btn:hover {
+    background: rgba(0,229,255,0.1);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* Crosshair */
+  #crosshair {
+    position: fixed;
+    pointer-events: none;
+    z-index: 997;
+    transform: translate(-50%, -50%);
+    display: none;
+  }
+
+  #game.active ~ #crosshair,
+  #game.active #crosshair { display: block; }
+
+  #crosshair line { stroke: rgba(255,255,255,0.8); stroke-width: 1.5; }
+  #crosshair circle { fill: none; stroke: rgba(255,255,255,0.8); stroke-width: 1.5; }
+
+</style>
+</head>
+<body>
+
+<!-- CUSTOM CROSSHAIR -->
+<svg id="crosshair" width="30" height="30" viewBox="-15 -15 30 30">
+  <line x1="-12" y1="0" x2="-4" y2="0"/>
+  <line x1="4" y1="0" x2="12" y2="0"/>
+  <line x1="0" y1="-12" x2="0" y2="-4"/>
+  <line x1="0" y1="4" x2="0" y2="12"/>
+  <circle r="3.5"/>
+</svg>
+
+<!-- MENU -->
+<div class="screen" id="menu">
+  <div class="logo">AIM<span>.</span>LAB</div>
+  <div class="tagline">Precision Training System</div>
+
+  <div class="mode-grid">
+    <div class="mode-card selected" data-mode="precision" onclick="selectMode(this)">
+      <span class="mode-icon">🎯</span>
+      <div class="mode-name">PRECISION</div>
+      <div class="mode-desc">Click targets as fast as possible. Classic aim training.</div>
+    </div>
+    <div class="mode-card" data-mode="flick" onclick="selectMode(this)">
+      <span class="mode-icon">⚡</span>
+      <div class="mode-name">FLICK</div>
+      <div class="mode-desc">Targets spawn at edges. Train explosive flick shots.</div>
+    </div>
+    <div class="mode-card" data-mode="tracking" onclick="selectMode(this)">
+      <span class="mode-icon">🔁</span>
+      <div class="mode-name">TRACKING</div>
+      <div class="mode-desc">Moving targets. Score points by hovering over them.</div>
+    </div>
+  </div>
+
+  <div class="diff-row">
+    <button class="diff-btn" data-diff="easy" onclick="selectDiff(this)">EASY</button>
+    <button class="diff-btn active" data-diff="medium" onclick="selectDiff(this)">MEDIUM</button>
+    <button class="diff-btn" data-diff="hard" onclick="selectDiff(this)">HARD</button>
+    <button class="diff-btn" data-diff="extreme" onclick="selectDiff(this)">EXTREME</button>
+  </div>
+
+  <button class="start-btn" onclick="startGame()"><span>START SESSION</span></button>
+</div>
+
+<!-- GAME -->
+<div class="screen" id="game">
+  <div class="hud">
+    <div class="hud-stat">
+      <div class="hud-label">Score</div>
+      <div class="hud-value" id="hud-score">0</div>
+    </div>
+    <div class="hud-center">
+      <div class="hud-stat">
+        <div class="hud-label">Accuracy</div>
+        <div class="hud-value" id="hud-acc">—</div>
+      </div>
+      <div>
+        <div class="hud-label" style="text-align:center;margin-bottom:4px" id="timer-label">TIME</div>
+        <div class="timer-bar-wrap">
+          <div class="timer-bar" id="timer-bar"></div>
+        </div>
+        <div style="text-align:center;margin-top:4px">
+          <span class="hud-value" id="hud-timer" style="font-size:1rem">60</span>
+        </div>
+      </div>
+      <div class="hud-stat">
+        <div class="hud-label">Streak</div>
+        <div class="hud-value" id="hud-streak">0</div>
+      </div>
+    </div>
+    <button class="quit-btn" onclick="endGame()">◀ QUIT</button>
+  </div>
+  <div id="arena"></div>
+</div>
+
+<!-- RESULTS -->
+<div class="screen" id="results">
+  <div class="results-title" id="res-title">GOOD SHOT</div>
+  <div class="results-mode" id="res-mode">PRECISION · MEDIUM</div>
+
+  <div class="stats-grid">
+    <div class="stat-box">
+      <div class="stat-box-label">Final Score</div>
+      <div class="stat-box-value" id="res-score">0</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-box-label">Targets Hit</div>
+      <div class="stat-box-value" id="res-hits">0</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-box-label">Targets Missed</div>
+      <div class="stat-box-value" id="res-misses">0</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-box-label">Best Streak</div>
+      <div class="stat-box-value" id="res-streak">0</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-box-label">Avg React (ms)</div>
+      <div class="stat-box-value" id="res-react">—</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-box-label">Accuracy</div>
+      <div class="stat-box-value" id="res-acc">0%</div>
+    </div>
+  </div>
+
+  <div class="accuracy-bar-wrap">
+    <div class="accuracy-bar-label">
+      <span>ACCURACY RATING</span>
+      <span id="res-acc-label">0%</span>
+    </div>
+    <div class="accuracy-bar">
+      <div class="accuracy-fill" id="res-acc-bar"></div>
+    </div>
+  </div>
+
+  <div class="results-btns">
+    <button class="res-btn primary" onclick="startGame()">PLAY AGAIN</button>
+    <button class="res-btn" onclick="showMenu()">MENU</button>
+  </div>
+</div>
+
+<script>
+  // State
+  let mode = 'precision';
+  let difficulty = 'medium';
+  let score = 0;
+  let hits = 0;
+  let misses = 0;
+  let streak = 0;
+  let bestStreak = 0;
+  let totalClicks = 0;
+  let reactionTimes = [];
+  let targetSpawnTime = 0;
+  let gameTimer = null;
+  let timeLeft = 60;
+  let totalTime = 60;
+  let targets = [];
+  let trackingScore = 0;
+  let trackingInterval = null;
+
+  // Config by difficulty
+  const config = {
+    easy:    { time: 60, targetSize: 80, lifetime: 3000, spawnDelay: 800,  points: 100 },
+    medium:  { time: 60, targetSize: 55, lifetime: 2000, spawnDelay: 600,  points: 150 },
+    hard:    { time: 60, targetSize: 38, lifetime: 1500, spawnDelay: 450,  points: 200 },
+    extreme: { time: 60, targetSize: 25, lifetime: 1000, spawnDelay: 300,  points: 300 },
+  };
+
+  function selectMode(el) {
+    document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+    mode = el.dataset.mode;
+  }
+
+  function selectDiff(el) {
+    document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+    difficulty = el.dataset.diff;
+  }
+
+  function showMenu() {
+    document.getElementById('menu').style.display = 'flex';
+    document.getElementById('results').classList.remove('active');
+    document.getElementById('game').classList.remove('active');
+    clearAllTargets();
+    clearInterval(gameTimer);
+    clearInterval(trackingInterval);
+  }
+
+  function startGame() {
+    // Reset state
+    score = 0; hits = 0; misses = 0; streak = 0; bestStreak = 0;
+    totalClicks = 0; reactionTimes = []; trackingScore = 0;
+
+    const cfg = config[difficulty];
+    timeLeft = cfg.time;
+    totalTime = cfg.time;
+
+    updateHUD();
+    document.getElementById('hud-timer').textContent = timeLeft;
+    document.getElementById('timer-bar').style.width = '100%';
+    document.getElementById('timer-bar').style.background = 'var(--accent)';
+
+    // Hide other screens
+    document.getElementById('menu').style.display = 'none';
+    document.getElementById('results').classList.remove('active');
+    document.getElementById('game').classList.add('active');
+
+    clearAllTargets();
+
+    // Set arena click handler for misses
+    const arena = document.getElementById('arena');
+    arena.onclick = handleArenaClick;
+
+    // Start timer
+    gameTimer = setInterval(() => {
+      timeLeft -= 0.1;
+      const pct = (timeLeft / totalTime) * 100;
+      document.getElementById('timer-bar').style.width = pct + '%';
+      if (pct < 30) document.getElementById('timer-bar').style.background = 'var(--accent2)';
+      if (pct < 10) document.getElementById('timer-bar').style.background = 'var(--accent2)';
+
+      const rounded = Math.ceil(timeLeft);
+      document.getElementById('hud-timer').textContent = rounded;
+      if (rounded <= 5) {
+        document.getElementById('hud-timer').classList.add('timer-warning');
+      } else {
+        document.getElementById('hud-timer').classList.remove('timer-warning');
+      }
+
+      if (timeLeft <= 0) {
+        clearInterval(gameTimer);
+        endGame();
+      }
+    }, 100);
+
+    if (mode === 'tracking') {
+      startTracking();
+    } else {
+      spawnTarget();
+    }
+  }
+
+  function handleArenaClick(e) {
+    if (e.target.closest('.target')) return;
+    if (mode === 'tracking') return;
+    misses++;
+    totalClicks++;
+    streak = 0;
+    updateHUD();
+    showMissFlash();
+  }
+
+  function spawnTarget() {
+    if (!document.getElementById('game').classList.contains('active')) return;
+    if (mode === 'tracking') return;
+
+    const cfg = config[difficulty];
+    const arena = document.getElementById('arena');
+    const W = arena.clientWidth;
+    const H = arena.clientHeight;
+    const s = cfg.targetSize;
+    const pad = s;
+
+    let x, y;
+    if (mode === 'flick') {
+      // Spawn near edges
+      const edge = Math.floor(Math.random() * 4);
+      if (edge === 0) { x = pad/2; y = pad + Math.random() * (H - 2*pad); }
+      else if (edge === 1) { x = W - pad/2; y = pad + Math.random() * (H - 2*pad); }
+      else if (edge === 2) { x = pad + Math.random() * (W - 2*pad); y = pad/2; }
+      else { x = pad + Math.random() * (W - 2*pad); y = H - pad/2; }
+    } else {
+      x = pad + Math.random() * (W - 2 * pad);
+      y = pad + Math.random() * (H - 2 * pad);
+    }
+
+    const el = document.createElement('div');
+    el.className = 'target';
+    el.style.width = el.style.height = s + 'px';
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.innerHTML = `
+      <div class="target-inner">
+        <div class="target-glow-circle"></div>
+        <div class="target-ring"></div>
+        <div class="target-ring"></div>
+        <div class="target-ring"></div>
+      </div>`;
+
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      handleHit(el, x, y);
+    });
+
+    arena.appendChild(el);
+    targetSpawnTime = Date.now();
+
+    // Animate in
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => el.classList.add('visible'));
+    });
+
+    // Auto-expire
+    const expireTimeout = setTimeout(() => {
+      if (el.parentNode) {
+        el.remove();
+        misses++;
+        streak = 0;
+        updateHUD();
+        showMissFlash();
+        setTimeout(spawnTarget, 200);
+      }
+    }, cfg.lifetime);
+
+    el._expireTimeout = expireTimeout;
+    targets.push(el);
+  }
+
+  function handleHit(el, x, y) {
+    const rt = Date.now() - targetSpawnTime;
+    reactionTimes.push(rt);
+    clearTimeout(el._expireTimeout);
+    el.remove();
+
+    hits++;
+    totalClicks++;
+    streak++;
+    if (streak > bestStreak) bestStreak = streak;
+
+    const cfg = config[difficulty];
+    let pts = cfg.points;
+    // Streak bonus
+    if (streak >= 5) pts = Math.floor(pts * 1.5);
+    else if (streak >= 3) pts = Math.floor(pts * 1.25);
+    score += pts;
+
+    updateHUD();
+    showHitFlash(x, y);
+    showScorePop(x, y, '+' + pts);
+
+    setTimeout(spawnTarget, cfg.spawnDelay);
+  }
+
+  // TRACKING MODE
+  let trackingTarget = null;
+  let trackingVx = 0, trackingVy = 0;
+  let trackingPos = { x: 0, y: 0 };
+  let isHovering = false;
+
+  function startTracking() {
+    const arena = document.getElementById('arena');
+    const cfg = config[difficulty];
+    const s = cfg.targetSize;
+
+    // Spawn single moving target
+    trackingTarget = document.createElement('div');
+    trackingTarget.className = 'target visible';
+    trackingTarget.style.width = trackingTarget.style.height = s + 'px';
+
+    trackingPos.x = arena.clientWidth / 2;
+    trackingPos.y = arena.clientHeight / 2;
+
+    const speed = { easy: 1.5, medium: 2.5, hard: 3.5, extreme: 5 }[difficulty];
+    trackingVx = (Math.random() - 0.5) * speed * 2;
+    trackingVy = (Math.random() - 0.5) * speed * 2;
+
+    trackingTarget.innerHTML = `
+      <div class="target-inner">
+        <div class="target-glow-circle"></div>
+        <div class="target-ring"></div>
+        <div class="target-ring"></div>
+        <div class="target-ring"></div>
+      </div>`;
+
+    trackingTarget.addEventListener('mouseenter', () => { isHovering = true; });
+    trackingTarget.addEventListener('mouseleave', () => { isHovering = false; });
+
+    arena.appendChild(trackingTarget);
+    updateTrackingPos();
+
+    trackingInterval = setInterval(() => {
+      const W = arena.clientWidth;
+      const H = arena.clientHeight;
+      const pad = s / 2;
+
+      trackingPos.x += trackingVx;
+      trackingPos.y += trackingVy;
+
+      // Bounce
+      if (trackingPos.x < pad || trackingPos.x > W - pad) { trackingVx *= -1; trackingPos.x = Math.max(pad, Math.min(W - pad, trackingPos.x)); }
+      if (trackingPos.y < pad || trackingPos.y > H - pad) { trackingVy *= -1; trackingPos.y = Math.max(pad, Math.min(H - pad, trackingPos.y)); }
+
+      // Slight direction wobble
+      trackingVx += (Math.random() - 0.5) * 0.2;
+      trackingVy += (Math.random() - 0.5) * 0.2;
+      const mag = Math.sqrt(trackingVx**2 + trackingVy**2);
+      if (mag > speed) { trackingVx = trackingVx/mag*speed; trackingVy = trackingVy/mag*speed; }
+
+      updateTrackingPos();
+
+      if (isHovering) {
+        hits++;
+        score += 10;
+        updateHUD();
+      } else {
+        misses++;
+        streak = 0;
+      }
+      totalClicks++;
+    }, 50);
+  }
+
+  function updateTrackingPos() {
+    if (trackingTarget) {
+      trackingTarget.style.left = trackingPos.x + 'px';
+      trackingTarget.style.top = trackingPos.y + 'px';
+    }
+  }
+
+  function clearAllTargets() {
+    targets.forEach(t => { clearTimeout(t._expireTimeout); if (t.parentNode) t.remove(); });
+    targets = [];
+    if (trackingTarget && trackingTarget.parentNode) trackingTarget.remove();
+    trackingTarget = null;
+    isHovering = false;
+    clearInterval(trackingInterval);
+  }
+
+  function updateHUD() {
+    document.getElementById('hud-score').textContent = score;
+    document.getElementById('hud-streak').textContent = streak;
+    if (totalClicks > 0) {
+      const acc = Math.round((hits / totalClicks) * 100);
+      document.getElementById('hud-acc').textContent = acc + '%';
+    }
+  }
+
+  function showHitFlash(x, y) {
+    const arena = document.getElementById('arena');
+    const el = document.createElement('div');
+    el.className = 'hit-flash';
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    arena.appendChild(el);
+    setTimeout(() => el.remove(), 400);
+  }
+
+  function showScorePop(x, y, text) {
+    const arena = document.getElementById('arena');
+    const el = document.createElement('div');
+    el.className = 'score-pop';
+    el.textContent = text;
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    arena.appendChild(el);
+    setTimeout(() => el.remove(), 700);
+  }
+
+  function showMissFlash() {
+    const el = document.createElement('div');
+    el.className = 'miss-flash';
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 350);
+  }
+
+  function endGame() {
+    clearInterval(gameTimer);
+    clearAllTargets();
+    document.getElementById('game').classList.remove('active');
+
+    // Build results
+    const acc = totalClicks > 0 ? Math.round((hits / totalClicks) * 100) : 0;
+    const avgReact = reactionTimes.length > 0
+      ? Math.round(reactionTimes.reduce((a,b)=>a+b,0) / reactionTimes.length)
+      : null;
+
+    // Title based on accuracy
+    let title, titleClass;
+    if (acc >= 80) { title = 'FLAWLESS'; titleClass = 'excellent'; }
+    else if (acc >= 60) { title = 'SHARP SHOT'; titleClass = 'good'; }
+    else if (acc >= 40) { title = 'KEEP AT IT'; titleClass = 'average'; }
+    else { title = 'NEEDS WORK'; titleClass = 'poor'; }
+
+    if (mode === 'tracking') {
+      title = score > 1000 ? 'LOCK ON' : 'LOST TARGET';
+      titleClass = score > 1000 ? 'excellent' : 'average';
+    }
+
+    document.getElementById('res-title').textContent = title;
+    document.getElementById('res-title').className = 'results-title ' + titleClass;
+    document.getElementById('res-mode').textContent = `${mode.toUpperCase()} · ${difficulty.toUpperCase()}`;
+    document.getElementById('res-score').textContent = score;
+    document.getElementById('res-hits').textContent = hits;
+    document.getElementById('res-misses').textContent = misses;
+    document.getElementById('res-streak').textContent = bestStreak;
+    document.getElementById('res-react').textContent = avgReact ? avgReact + 'ms' : '—';
+    document.getElementById('res-acc').textContent = acc + '%';
+    document.getElementById('res-acc-label').textContent = acc + '%';
+
+    document.getElementById('results').classList.add('active');
+    document.getElementById('menu').style.display = 'none';
+
+    // Animate bar
+    setTimeout(() => {
+      document.getElementById('res-acc-bar').style.width = acc + '%';
+    }, 200);
+  }
+
+  // Custom crosshair follows mouse during game
+  document.addEventListener('mousemove', (e) => {
+    const ch = document.getElementById('crosshair');
+    ch.style.left = e.clientX + 'px';
+    ch.style.top = e.clientY + 'px';
+    if (document.getElementById('game').classList.contains('active')) {
+      ch.style.display = 'block';
+    } else {
+      ch.style.display = 'none';
+    }
+  });
+</script>
+</body>
+</html>
